@@ -1,0 +1,7 @@
+gym==0.21.0
+stable-baselines3==1.6.2
+eclipse-sumo==1.15.0
+traci==1.15.0
+libsumo==1.15.0
+sumolib==1.15.0
+numpy==1.23.4
