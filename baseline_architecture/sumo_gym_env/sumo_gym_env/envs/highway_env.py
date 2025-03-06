@@ -90,9 +90,6 @@ class Highway(gym.Env):
 
         self.nb_states_per_vehicle = 7
 
-        self.state_t0 = None
-        self.state_t1 = None
-
         # Actionspace and observation space for gym
         state_size = self.nb_ego_states + (self.sensor_nb_vehicles * self.nb_states_per_vehicle)
         l = np.full(shape=(state_size,), fill_value=(-math.inf))
@@ -251,8 +248,8 @@ class Highway(gym.Env):
                     traci.vehicle.setColor(veh, (255, int(255*(1-speed_factor)), 0))
 
         # Create observation space
-        self.state_t1 = [self.positions, self.speeds, self.lanes, self.indicators, self.edge_name, False]
-        observation = self.sensor_model(self.state_t1)
+        state = [self.positions, self.speeds, self.lanes, self.indicators, self.edge_name, False]
+        observation = self.sensor_model(state)
 
         if self.use_gui:
             self.print_info_in_gui(info='Start')
@@ -276,8 +273,6 @@ class Highway(gym.Env):
                 info (list): List of information on what caused the terminal condition.
 
         """
-        self.state_t0 = np.copy(self.state_t1)
-
         long_action, lat_action = self.action_interp[action]
         if self.speeds[0, 0] + long_action > self.max_allowed_ego_speed:   # Limit maximum speed to max of vehicle
             long_action = self.max_allowed_ego_speed - self.speeds[0, 0]
@@ -287,7 +282,8 @@ class Highway(gym.Env):
         traci.vehicle.setSpeed(self.ego_id, self.speeds[0, 0] + long_action)
 
         self.step_ += 1
-        outside_road = False        
+        outside_road = False
+        done = False  
         info = []
         
         if ((self.lanes[0] == 0) and (lat_action == -1)) or ((self.lanes[0] == (self.nb_lanes - 1)) and (lat_action == 1)):
@@ -330,7 +326,6 @@ class Highway(gym.Env):
         collision = traci.simulation.getCollidingVehiclesNumber() > 0
         ego_collision = False
         ego_near_collision = False
-        done = False
         if collision:
             colliding_ids = traci.simulation.getCollidingVehiclesIDList()
             colliding_positions = [traci.vehicle.getPosition(veh) for veh in colliding_ids]
@@ -389,9 +384,9 @@ class Highway(gym.Env):
             self.nb_max_distance += 1
         else:
             pass
-        self.state_t1 = copy.deepcopy([self.positions, self.speeds, self.lanes, self.indicators, self.edge_name, done])
-        observation = self.sensor_model(self.state_t1)
-        reward = self.reward_model(self.state_t1, [long_action, lat_action], ego_collision, ego_near_collision, outside_road)
+        state = copy.deepcopy([self.positions, self.speeds, self.lanes, self.indicators, self.edge_name, done])
+        observation = self.sensor_model(state)
+        reward = self.reward_model(state, [long_action, lat_action], ego_collision, ego_near_collision, outside_road)
 
         if self.use_gui:
             self.print_info_in_gui(reward=reward, action=[long_action, lat_action], info=info, action_info=action_info)

@@ -98,14 +98,10 @@ class Highway(gym.Env):
         self.near_collision_penalty = sim_params['near_collision_penalty']
         self.outside_road_penalty = sim_params['outside_road_penalty']
         self.lane_change_penalty = sim_params['lane_change_penalty']
-        self.collision_penalty_weight = sim_params['collision_penalty_weight']
         self.completion_reward = sim_params['completion_reward']
 
         self.nb_ego_states = 6
         self.nb_states_per_vehicle = 7
-
-        self.state_t0 = None
-        self.state_t1 = None
 
         # Actionspace and observation space for gym
         state_size = self.nb_ego_states + (self.sensor_nb_vehicles * self.nb_states_per_vehicle)
@@ -277,8 +273,8 @@ class Highway(gym.Env):
                     traci.vehicle.setColor(veh, (255, int(255*(1-speed_factor)), 0))
 
         # Create observation space
-        self.state_t1 = [self.positions, self.speeds, self.lanes, self.indicators, self.edge_name, False]
-        observation = self.sensor_model(self.state_t1)
+        state = [self.positions, self.speeds, self.lanes, self.indicators, self.edge_name, False]
+        observation = self.sensor_model(state)
 		
         self.ego_energy_cost += (self.long_controller.get_initial_kinetic_energy(self.speeds[0,0]) * 0.5)
 
@@ -304,10 +300,9 @@ class Highway(gym.Env):
                 info (list): List of information on what caused the terminal condition.
 
         """
-        self.state_t0 = np.copy(self.state_t1)
-
         self.step_ += 1
-        outside_road = False        
+        outside_road = False
+        done = False      
         info = []
 
         if action == SET_TARGET_VEH_SHORT_GAP:
@@ -371,8 +366,6 @@ class Highway(gym.Env):
         collision = traci.simulation.getCollidingVehiclesNumber() > 0
         ego_collision = False
         ego_near_collision = False
-        done = False
-        collision_speed_diff = 0
         if collision:
             colliding_ids = traci.simulation.getCollidingVehiclesIDList()
             colliding_positions = [traci.vehicle.getPosition(veh) for veh in colliding_ids]
@@ -406,7 +399,6 @@ class Highway(gym.Env):
                 if self.ego_id in colliding_ids:
                     ego_collision = True
                     done = True
-                    collision_speed_diff = abs(colliding_speeds[0] - colliding_speeds[1])
                 else:
                     warnings.warn('Collision not involving ego vehicle. This should normally not happen.')
                     #print(self.step_, info)
@@ -433,9 +425,9 @@ class Highway(gym.Env):
         else:
             pass
 
-        self.state_t1 = copy.deepcopy([self.positions, self.speeds, self.lanes, self.indicators, self.edge_name, done])
-        observation = self.sensor_model(self.state_t1)
-        reward = self.reward_model(self.state_t1, action, ego_collision, ego_near_collision, outside_road, collision_speed_diff)
+        state = copy.deepcopy([self.positions, self.speeds, self.lanes, self.indicators, self.edge_name, done])
+        observation = self.sensor_model(state)
+        reward = self.reward_model(state, action, ego_collision, ego_near_collision, outside_road)
 
         if self.use_gui:
             self.print_info_in_gui(reward=reward, action=action, info=info, action_info=action_info)
@@ -443,7 +435,7 @@ class Highway(gym.Env):
         info_dict = {'info':info}
         return observation, reward, done, info_dict
     
-    def reward_model(self, new_state, action, ego_collision=False, ego_near_collision=False, outside_road=False, collision_speed_diff=0):
+    def reward_model(self, new_state, action, ego_collision=False, ego_near_collision=False, outside_road=False):
         """
         Reward model of the highway environment.
 
@@ -476,9 +468,6 @@ class Highway(gym.Env):
         elif ego_near_collision:
             reward -= self.near_collision_penalty
         elif ego_collision:
-            if collision_speed_diff == 0:
-                collision_speed_diff = 1
-            #reward -= (self.collision_penalty * collision_speed_diff * self.collision_penalty_weight)
             reward -= self.collision_penalty 
         # Reward when episode is completed successfully (ego vehicle reached exit edge)
         elif new_state[4][0] == "exit":   

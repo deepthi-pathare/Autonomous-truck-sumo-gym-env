@@ -29,7 +29,6 @@ sim_params['near_collision_penalty'] = 1000
 sim_params['outside_road_penalty'] = 1000
 sim_params['lane_change_penalty'] = 0.1
 sim_params['completion_reward'] = 2.78
-sim_params['collision_penalty_weight'] = 2
 
 # Vehicle type parameters
 # Vehicle 0 is the ego vehicle

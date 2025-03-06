@@ -103,9 +103,6 @@ class Highway(gym.Env):
         self.nb_ego_states = 6
         self.nb_states_per_vehicle = 7
 
-        self.state_t0 = None
-        self.state_t1 = None
-
         # Actionspace and observation space for gym
         state_size = self.nb_ego_states + (self.sensor_nb_vehicles * self.nb_states_per_vehicle)
         l = np.full(shape=(state_size,), fill_value=(-math.inf))
@@ -276,8 +273,8 @@ class Highway(gym.Env):
                     traci.vehicle.setColor(veh, (255, int(255*(1-speed_factor)), 0))
 
         # Create observation space
-        self.state_t1 = [self.positions, self.speeds, self.lanes, self.indicators, self.edge_name, False]
-        observation = self.sensor_model(self.state_t1)
+        state = [self.positions, self.speeds, self.lanes, self.indicators, self.edge_name, False]
+        observation = self.sensor_model(state)
 		
         self.ego_energy_cost += (self.long_controller.get_initial_kinetic_energy(self.speeds[0,0]) * 0.5)
 
@@ -303,10 +300,9 @@ class Highway(gym.Env):
                 info (list): List of information on what caused the terminal condition.
 
         """
-        self.state_t0 = np.copy(self.state_t1)
-
         self.step_ += 1
-        outside_road = False        
+        outside_road = False  
+        done = False      
         info = []
 
         if action == SET_TARGET_VEH_SHORT_GAP:
@@ -370,7 +366,6 @@ class Highway(gym.Env):
         collision = traci.simulation.getCollidingVehiclesNumber() > 0
         ego_collision = False
         ego_near_collision = False
-        done = False
         if collision:
             colliding_ids = traci.simulation.getCollidingVehiclesIDList()
             colliding_positions = [traci.vehicle.getPosition(veh) for veh in colliding_ids]
@@ -430,9 +425,9 @@ class Highway(gym.Env):
         else:
             pass
 
-        self.state_t1 = copy.deepcopy([self.positions, self.speeds, self.lanes, self.indicators, self.edge_name, done])
-        observation = self.sensor_model(self.state_t1)
-        reward = self.reward_model(self.state_t1, action, ego_collision, ego_near_collision, outside_road)
+        state = copy.deepcopy([self.positions, self.speeds, self.lanes, self.indicators, self.edge_name, done])
+        observation = self.sensor_model(state)
+        reward = self.reward_model(state, action, ego_collision, ego_near_collision, outside_road)
 
         if self.use_gui:
             self.print_info_in_gui(reward=reward, action=action, info=info, action_info=action_info)

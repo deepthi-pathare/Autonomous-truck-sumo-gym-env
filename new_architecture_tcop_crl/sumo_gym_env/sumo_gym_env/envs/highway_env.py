@@ -109,8 +109,7 @@ class Highway(gym.Env):
         self.collision_penalty = sim_params['collision_penalty']
         self.near_collision_penalty = sim_params['near_collision_penalty']
         self.outside_road_penalty = sim_params['outside_road_penalty']
-        self.lane_change_penalty = sim_params['lane_change_penalty']
-        self.collision_penalty_weight = sim_params['collision_penalty_weight']        
+        self.lane_change_penalty = sim_params['lane_change_penalty']    
         self.completion_reward = sim_params['completion_reward']
 
         self.nb_ego_states = 6
@@ -118,9 +117,6 @@ class Highway(gym.Env):
 
         self.dist_per_step = 0
         self.lat_control_duration = self.lane_width / EGO_LATERAL_SPEED
-
-        self.state_t0 = None
-        self.state_t1 = None
 
         # Actionspace and observation space for gym
         state_size = self.nb_ego_states + (self.sensor_nb_vehicles * self.nb_states_per_vehicle)
@@ -296,8 +292,8 @@ class Highway(gym.Env):
                     traci.vehicle.setColor(veh, (255, int(255*(1-speed_factor)), 0))
 
         # Create observation space
-        self.state_t1 = [self.positions, self.speeds, self.lanes, self.indicators, self.edge_name, False]
-        observation = self.sensor_model(self.state_t1)
+        state = [self.positions, self.speeds, self.lanes, self.indicators, self.edge_name, False]
+        observation = self.sensor_model(state)
 		
         init_energy_cost = (self.long_controller.get_initial_kinetic_energy(self.speeds[0,0]) * 0.5)
         self.ego_energy_cost += init_energy_cost
@@ -325,12 +321,10 @@ class Highway(gym.Env):
                 info (list): List of information on what caused the terminal condition.
 
         """
-        self.state_t0 = np.copy(self.state_t1)
-
         self.step_ += 1
-        outside_road = False        
+        outside_road = False
+        done = False 
         info = []
-        done = False
 
         prev_pos = self.positions[0,0]
 
@@ -432,7 +426,6 @@ class Highway(gym.Env):
                 if self.ego_id in colliding_ids:
                     ego_collision = True
                     done = True
-                    collision_speed_diff = abs(colliding_speeds[0] - colliding_speeds[1])
                 else:
                     warnings.warn('Collision not involving ego vehicle. This should normally not happen.')
                     #print(self.step_, info)
@@ -459,11 +452,11 @@ class Highway(gym.Env):
         else:
             pass
 
-        self.state_t1 = copy.deepcopy([self.positions, self.speeds, self.lanes, self.indicators, self.edge_name, done])
-        observation = self.sensor_model(self.state_t1)
+        state = copy.deepcopy([self.positions, self.speeds, self.lanes, self.indicators, self.edge_name, done])
+        observation = self.sensor_model(state)
         self.lvd = observation[5]
 
-        reward = self.reward_model(self.state_t1, action, ego_collision, ego_near_collision, outside_road, self.dist_per_step)
+        reward = self.reward_model(state, action, ego_collision, ego_near_collision, outside_road, self.dist_per_step)
 
         if self.use_gui:
             self.print_info_in_gui(reward=reward, action=action, info=info, action_info=action_info)
